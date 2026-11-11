@@ -32,16 +32,9 @@ class FlashCardsApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorSchemeSeed: Colors.indigo,
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: Colors.black,
         useMaterial3: true,
-      ),
-      // Vision board behind every screen, washed out so text stays readable.
-      builder: (context, child) => Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.asset('assets/visionboard.jpg', fit: BoxFit.cover),
-          ColoredBox(color: Colors.white.withOpacity(0.72)),
-          child!,
-        ],
       ),
       home: const HomePage(),
     );
@@ -99,7 +92,6 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
       appBar: AppBar(title: const Text('German Flash Cards')),
       body: _tab == 0
           ? AddWordsPage(words: _words, onAdd: _add, onRemove: _remove)
