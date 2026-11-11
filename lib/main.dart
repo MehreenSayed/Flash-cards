@@ -93,18 +93,21 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('German Flash Cards')),
-      body: _tab == 0
-          ? AddWordsPage(words: _words, onAdd: _add, onRemove: _remove)
-          : PracticePage(
-              words: List.of(_words),
-              onToggleLearning: _toggleLearning,
-            ),
+      body: switch (_tab) {
+        0 => AddWordsPage(words: _words, onAdd: _add, onRemove: _remove),
+        1 => WordsGridPage(words: _words, onToggleLearning: _toggleLearning),
+        _ => PracticePage(
+            words: List.of(_words),
+            onToggleLearning: _toggleLearning,
+          ),
+      },
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.edit), label: 'Add words'),
-          NavigationDestination(icon: Icon(Icons.style), label: 'Practice'),
+          NavigationDestination(icon: Icon(Icons.grid_view), label: 'Words'),
+          NavigationDestination(icon: Icon(Icons.style), label: 'Flashcards'),
         ],
       ),
     );
@@ -215,6 +218,126 @@ class _AddWordsPageState extends State<AddWordsPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Overview of every word as a grid of tiles, German and English together.
+class WordsGridPage extends StatefulWidget {
+  final List<Word> words;
+  final void Function(Word) onToggleLearning;
+  const WordsGridPage({
+    super.key,
+    required this.words,
+    required this.onToggleLearning,
+  });
+
+  @override
+  State<WordsGridPage> createState() => _WordsGridPageState();
+}
+
+class _WordsGridPageState extends State<WordsGridPage> {
+  bool _learningOnly = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown =
+        widget.words.where((w) => !_learningOnly || w.learning).toList();
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: SegmentedButton<bool>(
+            segments: [
+              ButtonSegment(
+                  value: false,
+                  label: Text('All words (${widget.words.length})')),
+              ButtonSegment(
+                value: true,
+                icon: const Icon(Icons.bookmark),
+                label: Text(
+                    'Learning (${widget.words.where((w) => w.learning).length})'),
+              ),
+            ],
+            selected: {_learningOnly},
+            onSelectionChanged: (s) => setState(() => _learningOnly = s.first),
+          ),
+        ),
+        Expanded(
+          child: shown.isEmpty
+              ? Center(
+                  child: Text(_learningOnly
+                      ? 'Your learning pile is empty.'
+                      : 'No words yet. Add your first one!'))
+              : GridView.builder(
+                  padding: const EdgeInsets.all(16),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 260,
+                    mainAxisExtent: 120,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                  ),
+                  itemCount: shown.length,
+                  itemBuilder: (context, i) {
+                    final w = shown[i];
+                    return Material(
+                      color: scheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        // Tap a tile to add/remove it from the learning pile.
+                        onTap: () => setState(() => widget.onToggleLearning(w)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: scheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text('${i + 1}',
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.bold)),
+                                  ),
+                                  const Spacer(),
+                                  if (w.learning)
+                                    const Icon(Icons.bookmark,
+                                        size: 18, color: Colors.orange),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                w.german,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                w.english,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: scheme.onSurfaceVariant),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }
