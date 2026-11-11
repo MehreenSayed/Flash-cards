@@ -9,11 +9,17 @@ void main() => runApp(const FlashCardsApp());
 class Word {
   final String german;
   final String english;
-  const Word(this.german, this.english);
+  // True when the word is in the learning pile (words I can't recall yet).
+  bool learning;
+  Word(this.german, this.english, {this.learning = false});
 
-  Map<String, String> toJson() => {'de': german, 'en': english};
-  factory Word.fromJson(Map<String, dynamic> j) =>
-      Word(j['de'] as String, j['en'] as String);
+  Map<String, dynamic> toJson() =>
+      {'de': german, 'en': english, 'learn': learning};
+  factory Word.fromJson(Map<String, dynamic> j) => Word(
+        j['de'] as String,
+        j['en'] as String,
+        learning: j['learn'] as bool? ?? false,
+      );
 }
 
 class FlashCardsApp extends StatelessWidget {
@@ -71,6 +77,11 @@ class _HomePageState extends State<HomePage> {
     _save();
   }
 
+  void _toggleLearning(Word w) {
+    setState(() => w.learning = !w.learning);
+    _save();
+  }
+
   void _remove(int i) {
     setState(() => _words.removeAt(i));
     _save();
@@ -82,7 +93,10 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(title: const Text('German Flash Cards')),
       body: _tab == 0
           ? AddWordsPage(words: _words, onAdd: _add, onRemove: _remove)
-          : PracticePage(words: List.of(_words)),
+          : PracticePage(
+              words: List.of(_words),
+              onToggleLearning: _toggleLearning,
+            ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tab,
         onDestinationSelected: (i) => setState(() => _tab = i),
@@ -183,6 +197,9 @@ class _AddWordsPageState extends State<AddWordsPage> {
                       itemBuilder: (context, i) {
                         final w = widget.words[i];
                         return ListTile(
+                          leading: w.learning
+                              ? const Icon(Icons.bookmark, color: Colors.orange)
+                              : null,
                           title: Text(w.german),
                           subtitle: Text(w.english),
                           trailing: IconButton(
@@ -202,7 +219,12 @@ class _AddWordsPageState extends State<AddWordsPage> {
 
 class PracticePage extends StatefulWidget {
   final List<Word> words;
-  const PracticePage({super.key, required this.words});
+  final void Function(Word) onToggleLearning;
+  const PracticePage({
+    super.key,
+    required this.words,
+    required this.onToggleLearning,
+  });
 
   @override
   State<PracticePage> createState() => _PracticePageState();
@@ -215,6 +237,7 @@ class _PracticePageState extends State<PracticePage> {
   late List<Word> _deck;
   int _index = 0;
   bool _showBack = false;
+  bool _learningOnly = false;
 
   @override
   void initState() {
@@ -223,7 +246,8 @@ class _PracticePageState extends State<PracticePage> {
   }
 
   void _reshuffle() {
-    _deck = List.of(widget.words)..shuffle(_rng);
+    _deck = widget.words.where((w) => !_learningOnly || w.learning).toList()
+      ..shuffle(_rng);
     _index = 0;
     _showBack = false;
   }
@@ -236,12 +260,63 @@ class _PracticePageState extends State<PracticePage> {
     });
   }
 
+  void _toggleLearning(Word word) {
+    widget.onToggleLearning(word);
+    setState(() {
+      // In the learning pile view, a word taken out of the pile leaves the deck.
+      if (_learningOnly && !word.learning) {
+        _deck.remove(word);
+        if (_index >= _deck.length) _index = 0;
+        _showBack = false;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final filter = Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: SegmentedButton<bool>(
+        segments: [
+          const ButtonSegment(value: false, label: Text('All words')),
+          ButtonSegment(
+            value: true,
+            icon: const Icon(Icons.bookmark),
+            label: Text(
+                'Learning (${widget.words.where((w) => w.learning).length})'),
+          ),
+        ],
+        selected: {_learningOnly},
+        onSelectionChanged: (s) => setState(() {
+          _learningOnly = s.first;
+          _reshuffle();
+        }),
+      ),
+    );
     if (_deck.isEmpty) {
-      return const Center(child: Text('Add some words first to practice.'));
+      return Column(
+        children: [
+          filter,
+          Expanded(
+            child: Center(
+              child: Text(_learningOnly
+                  ? 'Your learning pile is empty.'
+                  : 'Add some words first to practice.'),
+            ),
+          ),
+        ],
+      );
     }
     final word = _deck[_index];
+    return Column(
+      children: [
+        filter,
+        Expanded(child: _card(word)),
+      ],
+    );
+  }
+
+  Widget _card(Word word) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 500),
@@ -262,7 +337,19 @@ class _PracticePageState extends State<PracticePage> {
               ),
               const SizedBox(height: 8),
               const Text('Tap the card to flip'),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              word.learning
+                  ? OutlinedButton.icon(
+                      onPressed: () => _toggleLearning(word),
+                      icon: const Icon(Icons.check),
+                      label: const Text('I know it now - remove from pile'),
+                    )
+                  : FilledButton.tonalIcon(
+                      onPressed: () => _toggleLearning(word),
+                      icon: const Icon(Icons.bookmark_add_outlined),
+                      label: const Text("Don't remember - add to learning pile"),
+                    ),
+              const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
